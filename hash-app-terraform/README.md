@@ -1,4 +1,10 @@
-# Hash App using Terraform
+# Serverless application deployment using Terraform: hash-app
+
+## Problem
+
+Deploy an AWS Lambda Function that writes "*.sha256" files to a S3 bucket. The Lambda Function is triggered whenever ".json" or ".csv" files are created/uploaded to the S3 bucket. The lambda will then create a hash ".sha256" version of the file(s) in the S3 bucket.
+
+## Solution
 
 This solution contains a Terraform template 'hash-app-template.tf' and a 'src' folder containing a lambda function package.
 

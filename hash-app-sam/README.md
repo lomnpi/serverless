@@ -1,4 +1,10 @@
-# hash-app
+# Serverless application deployment using AWS SAM: hash-app
+
+## Problem
+
+Deploy an AWS Lambda Function that writes "*.sha256" files to a S3 bucket. The Lambda Function is triggered whenever ".json" or ".csv" files are created/uploaded to the S3 bucket. The lambda will then create a hash ".sha256" version of the file(s) in the S3 bucket.
+
+## Solution
 
 This solution contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
@@ -51,7 +57,3 @@ sam delete --stack-name <stackname> --config-file samconfig.toml
 ```
 
 If the stack failed to delete, please use the AWS console to delete the S3 bucket manually, and retry stack deletion. The S3 Bucket has versioning enabled and a deletion policy if there are objects in it.
-
-## Comment
-
-Different possible solutions came to mind for this deployment, I believe this is the most efficient for the type of deployment in hand. I have implemented best measures for both security and scalability. I'm open to suggestions to more efficient solutions and things I could have done better. 
