@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  hash-app
+
+  Sample SAM Template for hash-app
+
+Globals:
+  Function:
+    Timeout: 5
+
+Parameters: 
+  BucketName:
+    Type: String
+    Description: The name of the S3 Bucket to create.
+
+  HashFunctionName:
+    Type: String
+    Description: The name of the Lambda function to create.
+
+Resources:
+  # Role for lambda function
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: LambdaFunctionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: 
+              - !Sub 'arn:aws:s3:::${BucketName}-bucket/*'
+
+  # Lambda function for hashing '.csv' and '.json'
+  HashFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      FunctionName: !Ref HashFunctionName
+      CodeUri: src/
+      Handler: hash.handler
+      Runtime: python3.8
+      Role: !GetAtt LambdaFunctionRole.Arn
+      # Tracing: Active
+      Events:
+        NewCSVFile:
+          Type: S3
+          Properties:
+            Bucket: !Ref ProcessingFilesBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .csv
+        NewJSONFile:
+          Type: S3
+          Properties:
+            Bucket: !Ref ProcessingFilesBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .json
+
+  # S3 bucket for eligible members - stores processing files (.csv and .json)
+  ProcessingFilesBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${BucketName}-bucket'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${KMSKeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+
+  # KMS key for S3 bucket server-side encryption
+  # Grants Lambda function permission decrypt objects in S3 bucket
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-s3
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow VPC Flow Logs to use the key as well
+            Effect: Allow
+            Principal:
+              Service:
+                - delivery.logs.amazonaws.com
+            Action: 'kms:GenerateDataKey*'
+            Resource: '*'
+          - Sid: Allow function to decrypt objects
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt LambdaFunctionRole.Arn
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  # Alias for KMS key
+  KMSKeyAlias:
+      Type: AWS::KMS::Alias
+      Properties:
+        AliasName: !Join
+          - ''
+          - - 'alias/'
+            - !Sub '${BucketName}-bucket'
+            - '-key'
+        TargetKeyId: !Ref KMSKey
+      DependsOn: KMSKey
+
+Outputs:
+  HashFunction:
+    Description: Hash Lambda Function ARN
+    Value: !GetAtt HashFunction.Arn
+  KMSKey:
+      Description: KMS Key for encryption ARN
+      Value: !GetAtt KMSKey.Arn
+  ProcessingFilesBucket:
+      Description: Hash S3 Bucket ARN
+      Value: !GetAtt ProcessingFilesBucket.Arn
+  LambdaFunctionRole:
+      Description: Lambda function execution role
+      Value: !GetAtt LambdaFunctionRole.Arn
